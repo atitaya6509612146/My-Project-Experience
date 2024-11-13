@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CS299 Example</title>
+    <style type="text/css">
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+        }
+
+        #c {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+        }
+
+        button {
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <div id="ui-container">
+        <button id="play-music-button" onclick="console.log('Button clicked!')">Play Music</button>
+    </div>
+    <script type="module">
+        import * as THREE from "https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js";
+        import { OrbitControls } from "https://threejsfundamentals.org/threejs/resources/threejs/r132/examples/jsm/controls/OrbitControls.js";
+        import { GLTFLoader } from "https://threejsfundamentals.org/threejs/resources/threejs/r132/examples/jsm/loaders/GLTFLoader.js";
+
+        function main() {
+            const canvas = document.querySelector("#c");
+            const renderer = new THREE.WebGLRenderer({ canvas });
+
+            // Enable shadows
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            const fov = 45;
+            const aspect = 2;
+            const near = 0.1;
+            const far = 100;
+            const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+            camera.position.set(1, 1, 5);
+
+            const controls = new OrbitControls(camera, canvas);
+            controls.target.set(0, 0, 0);
+            controls.update();
+
+            const scene = new THREE.Scene();
+
+            //กำหนดพื้นหลัง
+            const cubeTextureLoader = new THREE.CubeTextureLoader();
+            const cubeTexture = cubeTextureLoader.load([
+                'background_right.jpg', 'background_left.jpg',
+                'background_top.jpg', 'background_bottom.jpg',
+                'background_front.jpg', 'background_back.jpg'
+            ]);
+            scene.background = cubeTexture;
+
+            // directional light จากข้างหน้า
+            {
+                const keyLight = new THREE.DirectionalLight(0xffffff, 5);
+                keyLight.position.set(2, 6, 5);
+                keyLight.castShadow = true;
+                keyLight.shadow.mapSize.width = 1024;
+                keyLight.shadow.mapSize.height = 1024;
+                scene.add(keyLight);
+            }
+
+            let musicBox; // Declare the musicBox variable
+
+            {
+                const gltfLoader = new GLTFLoader();
+                gltfLoader.load("project2.gltf", (gltf) => {
+                    musicBox = gltf.scene;
+                    scene.add(musicBox);
+
+                    // Find the object inside musicBox
+                    const balletMesh = musicBox.getObjectByName("ballet"); //บัลเลต์
+                    const lidMesh = musicBox.getObjectByName("lid"); //ฝา
+                    const edgeMesh = musicBox.getObjectByName("edge"); //ขอบ
+                    const baseMesh = musicBox.getObjectByName("base"); //ฐาน
+                    const PlaneOnMesh = musicBox.getObjectByName("PlaneOn"); //แผ่นรองข้างบน
+                    const coreMesh = musicBox.getObjectByName("core"); //แท่นที่บัลเลต์ยืน
+
+                    if (balletMesh) {
+                        // Enable shadows for the mesh
+                        balletMesh.castShadow = true;
+                        balletMesh.receiveShadow = true;
+
+                        // Use MeshStandardMaterial for the glass-like effect
+                        //toon shader
+                        const glassMaterial = new THREE.MeshStandardMaterial({
+                            color: 0xFAD6A5,
+                            metalness: 0.8,
+                            roughness: 0.084,
+                            opacity: 0.8,
+                            transparent: true,
+                            envMap: cubeTexture, 
+                        });
+
+                        balletMesh.material = glassMaterial;
+                    }
+
+                    if (lidMesh) {
+                        // Enable shadows for the mesh
+                        lidMesh.castShadow = true;
+                        lidMesh.receiveShadow = true;
+                    }
+
+                    if (edgeMesh) {
+                        // Enable shadows for the mesh
+                        edgeMesh.castShadow = true;
+                        edgeMesh.receiveShadow = true;
+                    }
+
+                    if (baseMesh) {
+                        // Enable shadows for the mesh
+                        baseMesh.castShadow = true;
+                        baseMesh.receiveShadow = true;
+                    }
+
+                    if (PlaneOnMesh) {
+                        // Enable shadows for the mesh
+                        PlaneOnMesh.castShadow = true;
+                        PlaneOnMesh.receiveShadow = true;
+                    }
+
+                    if (coreMesh) {
+                        // Enable shadows for the mesh
+                        coreMesh.castShadow = true;
+                        coreMesh.receiveShadow = true;
+                    }
+
+                    const box = new THREE.Box3().setFromObject(musicBox);
+                    const boxSize = box.getSize(new THREE.Vector3()).length();
+                    const boxCenter = box.getCenter(new THREE.Vector3());
+
+                    frameArea(boxSize, boxSize, boxCenter, camera);
+
+                    controls.maxDistance = boxSize * 10;
+                    controls.target.copy(boxCenter);
+                    controls.update();
+                });
+            }
+
+            // Add event listener for the "Play Music" button
+            const playMusicButton = document.getElementById("play-music-button");
+            playMusicButton.addEventListener("click", playMusic);
+
+            let audio;
+            function playMusic() {
+                if (!audio) {
+                    // ใส่เพลง
+                    audio = new Audio("music-box-lullaby-23919.mp3");
+                    audio.loop = true;
+                }
+
+                // Toggle play/pause
+                if (audio.paused) {
+                    audio.play();
+                } else {
+                    audio.pause();
+                }
+            }
+
+            //adjusting the camera position and field of view
+            function frameArea(sizeToFitOnScreen, boxSize, boxCenter, camera) {
+                const halfSizeToFitOnScreen = sizeToFitOnScreen * 0.5;
+                const halfFovY = THREE.MathUtils.degToRad(camera.fov * 0.5);
+                const distance = halfSizeToFitOnScreen / Math.tan(halfFovY);
+
+                const direction = new THREE.Vector3()
+                    .subVectors(camera.position, boxCenter)
+                    .multiply(new THREE.Vector3(1, 0, 1))
+                    .normalize();
+
+                camera.position.copy(direction.multiplyScalar(distance).add(boxCenter));
+
+                camera.near = boxSize / 100;
+                camera.far = boxSize * 100;
+
+                camera.updateProjectionMatrix();
+
+                camera.lookAt(boxCenter.x, boxCenter.y, boxCenter.z);
+            }
+
+            //resizing of the WebGL renderer to match the size of the canvas element 
+            function resizeRendererToDisplaySize(renderer) {
+                const canvas = renderer.domElement;
+                const width = canvas.clientWidth;
+                const height = canvas.clientHeight;
+                const needResize = canvas.width !== width || canvas.height !== height;
+                if (needResize) {
+                    renderer.setSize(width, height, false);
+                }
+                return needResize;
+            }
+
+            //create a smooth animation loop
+            function render(time) {
+                time *= 0.0005;
+
+                if (resizeRendererToDisplaySize(renderer)) {
+                    const canvas = renderer.domElement;
+                    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+                    camera.updateProjectionMatrix();
+                }
+
+                //ให้บัลเลต์หมุน
+                if (musicBox) {
+                    const balletMesh = musicBox.getObjectByName("ballet");
+                    if (balletMesh) {
+                        balletMesh.rotation.y = time; 
+                    }
+                }
+
+                renderer.render(scene, camera);
+
+                requestAnimationFrame(render);
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        main();
+    </script>
+</body>
+</html>
